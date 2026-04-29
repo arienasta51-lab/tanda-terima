@@ -1,0 +1,1007 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tanda Terima Online</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0f1419;
+            --bg-secondary: #1a2129;
+            --fg: #f4f4f5;
+            --muted: #8b949e;
+            --accent: #e6a54a;
+            --accent-hover: #d4922f;
+            --card: #1e272f;
+            --border: #2d3842;
+            --success: #3fb950;
+            --danger: #f85149;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background: var(--bg);
+            color: var(--fg);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .font-display { font-family: 'Playfair Display', serif; }
+
+        .bg-pattern {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; z-index: 0;
+            background: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(230, 165, 74, 0.08), transparent),
+                        radial-gradient(ellipse 60% 40% at 100% 100%, rgba(230, 165, 74, 0.05), transparent);
+        }
+
+        .grid-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; z-index: 0;
+            background-image: linear-gradient(rgba(230, 165, 74, 0.03) 1px, transparent 1px),
+                              linear-gradient(90deg, rgba(230, 165, 74, 0.03) 1px, transparent 1px);
+            background-size: 60px 60px;
+        }
+
+        .nav-item {
+            position: relative; padding: 0.75rem 1.5rem; border-radius: 0.5rem;
+            transition: all 0.3s ease; cursor: pointer; font-weight: 500; color: var(--muted);
+        }
+        .nav-item:hover { color: var(--fg); background: rgba(230, 165, 74, 0.1); }
+        .nav-item.active { color: var(--accent); background: rgba(230, 165, 74, 0.15); }
+        .nav-item.active::after {
+            content: ''; position: absolute; bottom: 0; left: 50%; transform: translateX(-50%);
+            width: 30px; height: 3px; background: var(--accent); border-radius: 3px;
+        }
+
+        .form-input {
+            width: 100%; padding: 1rem 1.25rem; background: var(--bg-secondary);
+            border: 2px solid var(--border); border-radius: 0.75rem;
+            color: var(--fg); font-size: 1rem; transition: all 0.3s ease; outline: none;
+        }
+        .form-input:focus { border-color: var(--accent); box-shadow: 0 0 0 4px rgba(230, 165, 74, 0.15); }
+        .form-input::placeholder { color: var(--muted); }
+        .form-label { display: block; margin-bottom: 0.5rem; font-weight: 600; color: var(--fg); font-size: 0.95rem; }
+        
+        .form-select {
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%238b949e' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+            background-repeat: no-repeat; background-position: right 1rem center; background-size: 1.25rem;
+            padding-right: 3rem;
+        }
+
+        .btn-primary {
+            display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+            padding: 1rem 2rem; background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%);
+            color: var(--bg); font-weight: 700; font-size: 1rem; border: none; border-radius: 0.75rem;
+            cursor: pointer; transition: all 0.3s ease; position: relative; overflow: hidden;
+        }
+        .btn-primary::before {
+            content: ''; position: absolute; top: 0; left: -100%; width: 100%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+            transition: left 0.5s ease;
+        }
+        .btn-primary:hover::before { left: 100%; }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(230, 165, 74, 0.3); }
+
+        .btn-secondary {
+            display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+            padding: 0.75rem 1.5rem; background: transparent; color: var(--fg); font-weight: 600;
+            font-size: 0.9rem; border: 2px solid var(--border); border-radius: 0.5rem;
+            cursor: pointer; transition: all 0.3s ease;
+        }
+        .btn-secondary:hover { border-color: var(--accent); color: var(--accent); background: rgba(230, 165, 74, 0.1); }
+        
+        .btn-danger { background: rgba(248, 81, 73, 0.1); border-color: rgba(248, 81, 73, 0.3); color: var(--danger); }
+        .btn-danger:hover { background: rgba(248, 81, 73, 0.2); border-color: var(--danger); color: var(--danger); }
+
+        .card { background: var(--card); border: 1px solid var(--border); border-radius: 1rem; overflow: hidden; transition: all 0.3s ease; }
+        .card:hover { border-color: rgba(230, 165, 74, 0.3); box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3); }
+
+        .signature-box {
+            background: linear-gradient(135deg, #fefefe 0%, #f8f8f8 100%);
+            border-radius: 0.75rem; position: relative; overflow: hidden;
+        }
+        .signature-box::before {
+            content: ''; position: absolute; bottom: 30%; left: 5%; right: 5%;
+            height: 2px; background: #ddd; border-radius: 2px;
+        }
+        
+        .auto-signature-badge {
+            position: absolute; top: 8px; right: 8px; background: rgba(230, 165, 74, 0.9);
+            color: #1a1a1a; font-size: 0.7rem; font-weight: 600; padding: 4px 8px;
+            border-radius: 4px; z-index: 10; display: flex; align-items: center; gap: 4px;
+        }
+
+        .data-table { width: 100%; border-collapse: separate; border-spacing: 0; }
+        .data-table th { padding: 1rem; text-align: left; font-weight: 600; color: var(--muted); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; background: var(--bg-secondary); border-bottom: 2px solid var(--border); }
+        .data-table td { padding: 1rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
+        .data-table tbody tr { transition: all 0.2s ease; }
+        .data-table tbody tr:hover { background: rgba(230, 165, 74, 0.05); }
+
+        .badge { display: inline-flex; align-items: center; padding: 0.35rem 0.75rem; font-size: 0.8rem; font-weight: 600; border-radius: 2rem; background: rgba(230, 165, 74, 0.15); color: var(--accent); }
+
+        @keyframes fadeInUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+        
+        .animate-in { animation: fadeInUp 0.6s ease forwards; }
+        .stagger-1 { animation-delay: 0.1s; opacity: 0; }
+        .stagger-2 { animation-delay: 0.2s; opacity: 0; }
+        .stagger-3 { animation-delay: 0.3s; opacity: 0; }
+        .shake { animation: shake 0.3s ease; }
+
+        .toast {
+            position: fixed; bottom: 2rem; right: 2rem; padding: 1rem 1.5rem;
+            background: var(--card); border: 1px solid var(--border); border-radius: 0.75rem;
+            display: flex; align-items: center; gap: 0.75rem; transform: translateY(100px);
+            opacity: 0; transition: all 0.4s ease; z-index: 1000; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        }
+        .toast.show { transform: translateY(0); opacity: 1; }
+        .toast.success { border-color: var(--success); }
+        .toast.success .toast-icon { color: var(--success); }
+        .toast.error { border-color: var(--danger); }
+        .toast.error .toast-icon { color: var(--danger); }
+
+        .modal-overlay {
+            position: fixed; inset: 0; background: rgba(0, 0, 0, 0.8); backdrop-filter: blur(4px);
+            display: flex; align-items: center; justify-content: center; z-index: 100;
+            opacity: 0; visibility: hidden; transition: all 0.3s ease; padding: 1rem;
+        }
+        .modal-overlay.active { opacity: 1; visibility: visible; }
+        .modal-content, .password-modal-content {
+            background: var(--card); border: 1px solid var(--border); border-radius: 1.5rem;
+            max-width: 500px; width: 100%; max-height: 90vh; overflow-y: auto;
+            transform: scale(0.9); transition: transform 0.3s ease;
+        }
+        .modal-overlay.active .modal-content, .modal-overlay.active .password-modal-content { transform: scale(1); }
+
+        .receipt-preview { background: white; color: #1a1a1a; padding: 40px; font-family: 'DM Sans', sans-serif; max-width: 600px; margin: 0 auto; }
+        .receipt-header { text-align: center; border-bottom: 3px double #1a1a1a; padding-bottom: 20px; margin-bottom: 30px; }
+        .receipt-title { font-family: 'Playfair Display', serif; font-size: 32px; font-weight: 700; margin-bottom: 5px; }
+        .receipt-date { color: #666; font-size: 14px; }
+        .receipt-info { margin-bottom: 30px; }
+        .receipt-info-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee; }
+        .receipt-info-label { color: #666; font-size: 14px; }
+        .receipt-info-value { font-weight: 600; }
+        .receipt-items { margin-bottom: 30px; }
+        .receipt-items-header { display: grid; grid-template-columns: 1fr auto auto; gap: 20px; padding: 12px 0; border-bottom: 2px solid #1a1a1a; font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+        .receipt-item { display: grid; grid-template-columns: 1fr auto auto; gap: 20px; padding: 12px 0; border-bottom: 1px solid #eee; }
+        .receipt-signature { margin-top: 50px; text-align: right; }
+        .receipt-signature-box { display: inline-block; text-align: center; min-width: 200px; }
+        .receipt-signature-name { font-family: 'Playfair Display', serif; font-style: italic; font-size: 24px; margin-bottom: 5px; min-height: 35px; }
+        .receipt-signature-label { font-size: 12px; color: #666; }
+
+        .empty-state { text-align: center; padding: 4rem 2rem; }
+        .empty-icon { width: 80px; height: 80px; margin: 0 auto 1.5rem; background: rgba(230, 165, 74, 0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+
+        /* Loading Spinner */
+        .spinner {
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <!-- Background Elements -->
+    <div class="bg-pattern"></div>
+    <div class="grid-overlay"></div>
+
+    <!-- Main Container -->
+    <div class="relative z-10 min-h-screen">
+        <!-- Header -->
+        <header class="border-b border-[var(--border)] bg-[var(--bg)]/80 backdrop-blur-lg sticky top-0 z-50">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex items-center justify-between h-16 sm:h-20">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-[var(--accent)] to-[var(--accent-hover)] flex items-center justify-center">
+                            <svg class="w-5 h-5 text-[var(--bg)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                        </div>
+                        <h1 class="font-display text-xl sm:text-2xl font-bold">Tanda Terima</h1>
+                    </div>
+
+                    <!-- Navigation -->
+                    <nav class="flex items-center gap-2">
+                        <button class="nav-item active" data-tab="form" onclick="switchTab('form')">
+                            <span class="hidden sm:inline">Buat Baru</span>
+                            <span class="sm:hidden">Buat</span>
+                        </button>
+                        <button class="nav-item" data-tab="dashboard" onclick="switchTab('dashboard')">
+                            <span class="hidden sm:inline">Dashboard</span>
+                            <span class="sm:hidden">Data</span>
+                        </button>
+                    </nav>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <!-- Form Section -->
+            <section id="form-section" class="animate-in">
+                <div class="grid lg:grid-cols-2 gap-8">
+                    <!-- Form -->
+                    <div class="card p-6 sm:p-8 stagger-1 animate-in">
+                        <h2 class="font-display text-2xl font-bold mb-6">Buat Tanda Terima Baru</h2>
+                        
+                        <form id="receipt-form" class="space-y-6">
+                            <div class="stagger-2 animate-in">
+                                <label class="form-label" for="namaPenerima">Nama Penerima</label>
+                                <input type="text" id="namaPenerima" class="form-input" placeholder="Masukkan nama lengkap penerima" required>
+                            </div>
+
+                            <div class="stagger-3 animate-in">
+                                <label class="form-label">Daftar Barang</label>
+                                <div id="items-container" class="space-y-4">
+                                    <div class="item-row grid grid-cols-12 gap-3">
+                                        <div class="col-span-5">
+                                            <input type="text" class="form-input item-nama" placeholder="Nama barang" required>
+                                        </div>
+                                        <div class="col-span-3">
+                                            <input type="number" class="form-input item-jumlah" placeholder="Jumlah" min="1" required>
+                                        </div>
+                                        <div class="col-span-3">
+                                            <select class="form-input form-select item-satuan" required>
+                                                <option value="">Satuan</option>
+                                                <option value="Kg">Kg</option>
+                                                <option value="Pcs">Pcs</option>
+                                                <option value="Pack">Pack</option>
+                                                <option value="Kardus">Kardus</option>
+                                                <option value="Lusin">Lusin</option>
+                                                <option value="Lembar">Lembar</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-span-1 flex items-center">
+                                            <button type="button" class="btn-secondary btn-danger p-2 remove-item" onclick="removeItem(this)" style="display:none;">
+                                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <button type="button" class="btn-secondary mt-4" onclick="addItem()">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                                    </svg>
+                                    Tambah Barang
+                                </button>
+                            </div>
+
+                            <div class="stagger-4 animate-in">
+                                <label class="form-label">Tanda Tangan Digital</label>
+                                <div class="signature-box h-32 flex items-center justify-center relative">
+                                    <div id="auto-signature-badge" class="auto-signature-badge" style="display: none;">
+                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                        </svg>
+                                        Otomatis
+                                    </div>
+                                    <canvas id="signature-canvas" class="w-full h-full cursor-crosshair"></canvas>
+                                </div>
+                                <p class="text-sm text-[var(--muted)] mt-2">Tanda tangan otomatis dari nama penerima.</p>
+                                <div class="flex gap-2 mt-3">
+                                    <button type="button" class="btn-secondary text-sm" onclick="resetToAutoSignature()">Reset ke Nama</button>
+                                    <button type="button" class="btn-secondary text-sm" onclick="clearSignature()">Hapus</button>
+                                </div>
+                            </div>
+
+                            <div class="stagger-5 animate-in">
+                                <button type="submit" class="btn-primary w-full" id="submit-btn">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                    </svg>
+                                    Simpan Tanda Terima
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Preview -->
+                    <div class="card stagger-2 animate-in">
+                        <div class="p-4 border-b border-[var(--border)] flex items-center justify-between">
+                            <h3 class="font-semibold">Preview Tanda Terima</h3>
+                        </div>
+                        <div id="preview-container" class="p-6 bg-gray-100 min-h-[500px]">
+                            <div id="receipt-preview" class="receipt-preview">
+                                <div class="receipt-header">
+                                    <div class="receipt-title">TANDA TERIMA</div>
+                                    <div class="receipt-date" id="preview-date">-</div>
+                                </div>
+                                <div class="receipt-info">
+                                    <div class="receipt-info-row">
+                                        <span class="receipt-info-label">Nama Penerima</span>
+                                        <span class="receipt-info-value" id="preview-nama">-</span>
+                                    </div>
+                                    <div class="receipt-info-row">
+                                        <span class="receipt-info-label">No. Referensi</span>
+                                        <span class="receipt-info-value" id="preview-ref">-</span>
+                                    </div>
+                                </div>
+                                <div class="receipt-items">
+                                    <div class="receipt-items-header">
+                                        <span>Barang</span>
+                                        <span>Jumlah</span>
+                                        <span>Satuan</span>
+                                    </div>
+                                    <div id="preview-items">
+                                        <div class="receipt-item"><span class="text-gray-400">Belum ada barang</span></div>
+                                    </div>
+                                </div>
+                                <div class="receipt-signature">
+                                    <div class="receipt-signature-box">
+                                        <div class="receipt-signature-name" id="preview-signature">-</div>
+                                        <div class="receipt-signature-line"></div>
+                                        <div class="receipt-signature-label" id="preview-signature-label">-</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Dashboard Section -->
+            <section id="dashboard-section" class="hidden">
+                <!-- Stats -->
+                <div class="grid sm:grid-cols-3 gap-4 mb-8">
+                    <div class="card p-6 animate-in stagger-1">
+                        <div class="flex items-center gap-4">
+                            <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-[var(--accent)]/20 to-[var(--accent)]/10 flex items-center justify-center">
+                                <svg class="w-6 h-6 text-[var(--accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <p class="text-[var(--muted)] text-sm">Total Tanda Terima</p>
+                                <p class="text-2xl font-bold" id="stat-total">0</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card p-6 animate-in stagger-2">
+                        <div class="flex items-center gap-4">
+                            <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-green-500/20 to-green-500/10 flex items-center justify-center">
+                                <svg class="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <p class="text-[var(--muted)] text-sm">Total Barang</p>
+                                <p class="text-2xl font-bold" id="stat-items">0</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card p-6 animate-in stagger-3">
+                        <div class="flex items-center gap-4">
+                            <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500/20 to-blue-500/10 flex items-center justify-center">
+                                <svg class="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <p class="text-[var(--muted)] text-sm">Total Penerima</p>
+                                <p class="text-2xl font-bold" id="stat-recipients">0</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Search -->
+                <div class="card p-4 mb-6 animate-in stagger-4">
+                    <div class="flex flex-col sm:flex-row gap-4">
+                        <div class="flex-1 relative">
+                            <svg class="w-5 h-5 text-[var(--muted)] absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                            </svg>
+                            <input type="text" id="search-input" class="form-input pl-10" placeholder="Cari nama penerima atau barang...">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Data Table -->
+                <div class="card overflow-hidden animate-in stagger-5">
+                    <div class="overflow-x-auto">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>No. Ref</th>
+                                    <th>Tanggal</th>
+                                    <th>Penerima</th>
+                                    <th>Barang</th>
+                                    <th>Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody id="table-body">
+                                <!-- Data will be populated here -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <div id="empty-state" class="empty-state hidden">
+                        <div class="empty-icon">
+                            <svg class="w-10 h-10 text-[var(--muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                        </div>
+                        <h3 class="text-lg font-semibold mb-2">Belum Ada Data</h3>
+                        <p class="text-[var(--muted)]">Buat tanda terima pertama Anda untuk memulai.</p>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- View Detail Modal -->
+    <div id="view-modal" class="modal-overlay" onclick="closeModalOnOverlay(event)">
+        <div class="modal-content max-w-2xl">
+            <div class="p-4 border-b border-[var(--border)] flex items-center justify-between">
+                <h3 class="font-semibold text-lg">Detail Tanda Terima</h3>
+                <button class="btn-secondary p-2" onclick="closeModal()">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            <div id="modal-content" class="p-6"></div>
+            <div class="p-4 border-t border-[var(--border)] flex justify-end gap-3">
+                <button class="btn-secondary" onclick="closeModal()">Tutup</button>
+                <button class="btn-primary" onclick="downloadCurrentPDF()">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                    </svg>
+                    Download PDF
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Password Modal -->
+    <div id="password-modal" class="modal-overlay" onclick="closePasswordModalOnOverlay(event)">
+        <div class="password-modal-content">
+            <div class="p-5 border-b border-[var(--border)]">
+                <h3 class="font-semibold text-lg flex items-center gap-2">
+                    <svg class="w-5 h-5 text-[var(--accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                    </svg>
+                    Konfirmasi Hapus
+                </h3>
+            </div>
+            <div class="p-5">
+                <p class="text-[var(--muted)] mb-4">Masukkan password untuk menghapus data ini.</p>
+                <input type="password" id="password-input" class="form-input" placeholder="Masukkan password" onkeypress="handlePasswordKeyPress(event)">
+                <p id="password-error" class="text-[var(--danger)] text-sm mt-2 hidden">Password salah!</p>
+            </div>
+            <div class="p-4 border-t border-[var(--border)] flex justify-end gap-3">
+                <button class="btn-secondary" onclick="closePasswordModal()">Batal</button>
+                <button class="btn-primary" onclick="confirmDelete()">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                    </svg>
+                    Hapus
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast">
+        <span class="toast-icon"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg></span>
+        <span id="toast-message">Berhasil disimpan!</span>
+    </div>
+
+    <script>
+        // ========================
+        // FIREBASE CONFIGURATION
+        // ========================
+        const firebaseConfig = {
+            apiKey: "AIzaSyDFqZPP1jB6W9_seq85GgHLT7EZu47a0_o",
+            authDomain: "tanda-terima-d85a4.firebaseapp.com",
+            databaseURL: "https://tanda-terima-d85a4-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "tanda-terima-d85a4",
+            storageBucket: "tanda-terima-d85a4.firebasestorage.app",
+            messagingSenderId: "358453571022",
+            appId: "1:358453571022:web:ea09cfa4144ef494bd4f9f",
+            measurementId: "G-EMYNZBDN2D"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+        const receiptsRef = database.ref('receipts');
+
+        // ========================
+        // APP VARIABLES
+        // ========================
+        let localReceiptsCache = []; // Cache for client-side search/filter
+        let currentViewId = null;
+        let deleteTargetId = null;
+        let signaturePad = null;
+        let isDrawing = false;
+        let lastX = 0;
+        let lastY = 0;
+        let isAutoSignature = true;
+        let autoSignatureName = '';
+        const DELETE_PASSWORD = '123456';
+
+        // ========================
+        // CORE FUNCTIONS
+        // ========================
+
+        function generateRefNumber() {
+            const date = new Date();
+            const year = date.getFullYear().toString().slice(-2);
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+            return `TT-${year}${month}-${random}`;
+        }
+
+        function formatDate(dateStr) {
+            const date = new Date(dateStr);
+            const options = { day: 'numeric', month: 'long', year: 'numeric' };
+            return date.toLocaleDateString('id-ID', options);
+        }
+
+        function switchTab(tab) {
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.classList.toggle('active', item.dataset.tab === tab);
+            });
+            document.getElementById('form-section').classList.toggle('hidden', tab !== 'form');
+            document.getElementById('dashboard-section').classList.toggle('hidden', tab !== 'dashboard');
+            if (tab === 'dashboard') renderDashboard();
+        }
+
+        // ========================
+        // FIREBASE REALTIME DATABASE
+        // ========================
+
+        // Listen for real-time updates
+        receiptsRef.on('value', (snapshot) => {
+            const data = snapshot.val();
+            localReceiptsCache = [];
+            
+            if (data) {
+                // Convert object to array and sort by date descending
+                localReceiptsCache = Object.keys(data).map(key => ({
+                    id: key,
+                    ...data[key]
+                })).sort((a, b) => new Date(b.tanggal) - new Date(a.tanggal));
+            }
+            
+            updateStats();
+            // Re-render dashboard if it's visible
+            if (!document.getElementById('dashboard-section').classList.contains('hidden')) {
+                renderDashboard();
+            }
+        });
+
+        function saveToFirebase(receiptData) {
+            return receiptsRef.push(receiptData);
+        }
+
+        function deleteFromFirebase(id) {
+            return receiptsRef.child(id).remove();
+        }
+
+        // ========================
+        // FORM & UI LOGIC
+        // ========================
+
+        function addItem() {
+            const container = document.getElementById('items-container');
+            const newRow = document.createElement('div');
+            newRow.className = 'item-row grid grid-cols-12 gap-3';
+            newRow.innerHTML = `
+                <div class="col-span-5"><input type="text" class="form-input item-nama" placeholder="Nama barang" required></div>
+                <div class="col-span-3"><input type="number" class="form-input item-jumlah" placeholder="Jumlah" min="1" required></div>
+                <div class="col-span-3">
+                    <select class="form-input form-select item-satuan" required>
+                        <option value="">Satuan</option>
+                        <option value="Kg">Kg</option>
+                        <option value="Pcs">Pcs</option>
+                        <option value="Pack">Pack</option>
+                        <option value="Kardus">Kardus</option>
+                        <option value="Lusin">Lusin</option>
+                        <option value="Lembar">Lembar</option>
+                    </select>
+                </div>
+                <div class="col-span-1 flex items-center">
+                    <button type="button" class="btn-secondary btn-danger p-2 remove-item" onclick="removeItem(this)">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                    </button>
+                </div>
+            `;
+            container.appendChild(newRow);
+            updateRemoveButtons();
+            attachItemListeners();
+        }
+
+        function removeItem(btn) {
+            btn.closest('.item-row').remove();
+            updateRemoveButtons();
+            updatePreview();
+        }
+
+        function updateRemoveButtons() {
+            const rows = document.querySelectorAll('.item-row');
+            rows.forEach((row, index) => {
+                const btn = row.querySelector('.remove-item');
+                if (btn) btn.style.display = rows.length > 1 ? 'flex' : 'none';
+            });
+        }
+
+        function getItems() {
+            const items = [];
+            document.querySelectorAll('.item-row').forEach(row => {
+                const nama = row.querySelector('.item-nama').value.trim();
+                const jumlah = row.querySelector('.item-jumlah').value;
+                const satuan = row.querySelector('.item-satuan').value;
+                if (nama && jumlah && satuan) items.push({ nama, jumlah: parseInt(jumlah), satuan });
+            });
+            return items;
+        }
+
+        // Signature Canvas Logic
+        function initSignatureCanvas() {
+            const canvas = document.getElementById('signature-canvas');
+            const ctx = canvas.getContext('2d');
+            
+            function resizeCanvas() {
+                const rect = canvas.getBoundingClientRect();
+                canvas.width = rect.width;
+                canvas.height = rect.height;
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                if (isAutoSignature && autoSignatureName) drawAutoSignature(autoSignatureName);
+            }
+            
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
+
+            const startDraw = (e) => {
+                isDrawing = true;
+                isAutoSignature = false;
+                updateAutoSignatureBadge();
+                const rect = canvas.getBoundingClientRect();
+                const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+                const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+                lastX = clientX - rect.left;
+                lastY = clientY - rect.top;
+            };
+
+            const draw = (e) => {
+                if (!isDrawing) return;
+                e.preventDefault();
+                const rect = canvas.getBoundingClientRect();
+                const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+                const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+                const x = clientX - rect.left;
+                const y = clientY - rect.top;
+
+                ctx.beginPath();
+                ctx.moveTo(lastX, lastY);
+                ctx.lineTo(x, y);
+                ctx.strokeStyle = '#1a1a1a';
+                ctx.lineWidth = 2;
+                ctx.lineCap = 'round';
+                ctx.stroke();
+                lastX = x;
+                lastY = y;
+            };
+
+            const stopDraw = () => { isDrawing = false; updatePreview(); };
+
+            canvas.addEventListener('mousedown', startDraw);
+            canvas.addEventListener('mousemove', draw);
+            canvas.addEventListener('mouseup', stopDraw);
+            canvas.addEventListener('mouseout', stopDraw);
+            canvas.addEventListener('touchstart', startDraw, { passive: false });
+            canvas.addEventListener('touchmove', draw, { passive: false });
+            canvas.addEventListener('touchend', stopDraw);
+
+            signaturePad = { canvas, ctx };
+        }
+
+        function drawAutoSignature(name) {
+            if (!signaturePad) return;
+            const { canvas, ctx } = signaturePad;
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            if (name) {
+                ctx.font = 'italic 26px "Playfair Display", serif';
+                ctx.fillStyle = '#1a1a1a';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(name, canvas.width / 2, canvas.height / 2 - 5);
+                isAutoSignature = true;
+                autoSignatureName = name;
+            } else {
+                isAutoSignature = false;
+                autoSignatureName = '';
+            }
+            updateAutoSignatureBadge();
+        }
+
+        function updateAutoSignatureBadge() {
+            const badge = document.getElementById('auto-signature-badge');
+            if (badge) badge.style.display = isAutoSignature ? 'flex' : 'none';
+        }
+
+        function resetToAutoSignature() {
+            const name = document.getElementById('namaPenerima').value.trim();
+            if (!name) return showToast('Masukkan nama penerima terlebih dahulu', 'error');
+            drawAutoSignature(name);
+            updatePreview();
+        }
+
+        function clearSignature() {
+            if (!signaturePad) return;
+            signaturePad.ctx.fillStyle = '#ffffff';
+            signaturePad.ctx.fillRect(0, 0, signaturePad.canvas.width, signaturePad.canvas.height);
+            isAutoSignature = false;
+            autoSignatureName = '';
+            updateAutoSignatureBadge();
+            updatePreview();
+        }
+
+        function updatePreview() {
+            const name = document.getElementById('namaPenerima').value.trim() || '-';
+            const items = getItems();
+            const ref = generateRefNumber();
+            const today = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+
+            document.getElementById('preview-nama').textContent = name;
+            document.getElementById('preview-date').textContent = today;
+            document.getElementById('preview-ref').textContent = ref;
+            document.getElementById('preview-signature-label').textContent = name !== '-' ? name : '-';
+
+            const itemsContainer = document.getElementById('preview-items');
+            itemsContainer.innerHTML = items.length ? items.map(i => `<div class="receipt-item"><span>${i.nama}</span><span>${i.jumlah}</span><span>${i.satuan}</span></div>`).join('') : '<div class="receipt-item"><span class="text-gray-400">Belum ada barang</span></div>';
+
+            const canvas = document.getElementById('signature-canvas');
+            const signaturePreview = document.getElementById('preview-signature');
+            const ctx = canvas.getContext('2d');
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            let hasSignature = imageData.data.some((v, i) => i % 4 === 0 && v < 250);
+
+            if (hasSignature && name !== '-') {
+                signaturePreview.innerHTML = `<img src="${canvas.toDataURL()}" alt="signature" style="max-height: 60px; margin-bottom: 5px;">`;
+            } else {
+                signaturePreview.textContent = name;
+            }
+        }
+
+        function handleNamaPenerimaChange() {
+            const name = document.getElementById('namaPenerima').value.trim();
+            if (isAutoSignature || !autoSignatureName) drawAutoSignature(name);
+            updatePreview();
+        }
+
+        function attachItemListeners() {
+            document.querySelectorAll('.item-nama, .item-jumlah, .item-satuan').forEach(input => {
+                input.addEventListener('input', updatePreview);
+                input.addEventListener('change', updatePreview);
+            });
+        }
+
+        // Form Submit
+        document.getElementById('receipt-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const nama = document.getElementById('namaPenerima').value.trim();
+            const items = getItems();
+
+            if (!nama) return showToast('Nama penerima harus diisi', 'error');
+            if (items.length === 0) return showToast('Tambahkan minimal satu barang', 'error');
+
+            const btn = document.getElementById('submit-btn');
+            btn.disabled = true;
+            btn.innerHTML = `<div class="spinner"></div> Menyimpan...`;
+
+            const receiptData = {
+                nama: nama,
+                items: items,
+                signature: document.getElementById('signature-canvas').toDataURL(),
+                tanggal: new Date().toISOString(),
+                refNumber: generateRefNumber()
+            };
+
+            saveToFirebase(receiptData).then(() => {
+                showToast('Tanda terima berhasil disimpan!', 'success');
+                this.reset();
+                document.getElementById('items-container').innerHTML = `<div class="item-row grid grid-cols-12 gap-3"><div class="col-span-5"><input type="text" class="form-input item-nama" placeholder="Nama barang" required></div><div class="col-span-3"><input type="number" class="form-input item-jumlah" placeholder="Jumlah" min="1" required></div><div class="col-span-3"><select class="form-input form-select item-satuan" required><option value="">Satuan</option><option value="Kg">Kg</option><option value="Pcs">Pcs</option><option value="Pack">Pack</option><option value="Kardus">Kardus</option><option value="Lusin">Lusin</option><option value="Lembar">Lembar</option></select></div><div class="col-span-1 flex items-center"><button type="button" class="btn-secondary btn-danger p-2 remove-item" onclick="removeItem(this)" style="display:none;"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button></div></div>`;
+                attachItemListeners();
+                clearSignature();
+                isAutoSignature = true;
+                updatePreview();
+                btn.disabled = false;
+                btn.innerHTML = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Simpan Tanda Terima`;
+            }).catch(err => {
+                showToast('Gagal menyimpan: ' + err.message, 'error');
+                btn.disabled = false;
+                btn.innerHTML = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Simpan Tanda Terima`;
+            });
+        });
+
+        // ========================
+        // DASHBOARD & RENDERING
+        // ========================
+
+        function updateStats() {
+            const totalItems = localReceiptsCache.reduce((sum, r) => sum + r.items.length, 0);
+            const uniqueRecipients = new Set(localReceiptsCache.map(r => r.nama.toLowerCase())).size;
+            document.getElementById('stat-total').textContent = localReceiptsCache.length;
+            document.getElementById('stat-items').textContent = totalItems;
+            document.getElementById('stat-recipients').textContent = uniqueRecipients;
+        }
+
+        function renderDashboard() {
+            updateStats();
+            const searchQuery = document.getElementById('search-input').value.toLowerCase();
+            const filtered = localReceiptsCache.filter(r => 
+                r.nama.toLowerCase().includes(searchQuery) ||
+                r.items.some(i => i.nama.toLowerCase().includes(searchQuery))
+            );
+
+            const tbody = document.getElementById('table-body');
+            const empty = document.getElementById('empty-state');
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = '';
+                empty.classList.remove('hidden');
+            } else {
+                empty.classList.add('hidden');
+                tbody.innerHTML = filtered.map(r => `
+                    <tr>
+                        <td><span class="badge">${r.refNumber}</span></td>
+                        <td>${formatDate(r.tanggal)}</td>
+                        <td class="font-medium">${r.nama}</td>
+                        <td>${r.items.length} barang</td>
+                        <td>
+                            <div class="flex gap-2">
+                                <button class="btn-secondary text-xs" onclick="viewReceipt('${r.id}')">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                                    Lihat
+                                </button>
+                                <button class="btn-secondary text-xs" onclick="downloadPDF('${r.id}')">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                                    PDF
+                                </button>
+                                <button class="btn-secondary btn-danger text-xs" onclick="requestDelete('${r.id}')">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `).join('');
+            }
+        }
+
+        function viewReceipt(id) {
+            const receipt = localReceiptsCache.find(r => r.id === id);
+            if (!receipt) return;
+            currentViewId = id;
+            document.getElementById('modal-content').innerHTML = `
+                <div class="bg-white text-gray-900 rounded-lg p-6">
+                    <div class="text-center border-b-2 border-double border-gray-900 pb-4 mb-6">
+                        <h2 class="text-2xl font-bold font-display">TANDA TERIMA</h2>
+                        <p class="text-gray-500 text-sm">${formatDate(receipt.tanggal)}</p>
+                    </div>
+                    <div class="space-y-2 mb-6">
+                        <div class="flex justify-between py-2 border-b border-gray-200"><span class="text-gray-500">No. Referensi</span><span class="font-semibold">${receipt.refNumber}</span></div>
+                        <div class="flex justify-between py-2 border-b border-gray-200"><span class="text-gray-500">Nama Penerima</span><span class="font-semibold">${receipt.nama}</span></div>
+                    </div>
+                    <div class="mb-6">
+                        <div class="grid grid-cols-3 gap-4 py-2 border-b-2 border-gray-900 text-sm font-bold uppercase"><span>Barang</span><span class="text-center">Jumlah</span><span class="text-right">Satuan</span></div>
+                        ${receipt.items.map(i => `<div class="grid grid-cols-3 gap-4 py-3 border-b border-gray-200"><span>${i.nama}</span><span class="text-center">${i.jumlah}</span><span class="text-right">${i.satuan}</span></div>`).join('')}
+                    </div>
+                    <div class="text-right mt-12">
+                        <div class="inline-block">
+                            <img src="${receipt.signature}" alt="signature" class="h-16 mb-2 mx-auto" onerror="this.style.display='none'">
+                            <div class="border-t border-gray-900 pt-2"><p class="text-xs text-gray-500">${receipt.nama}</p></div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.getElementById('view-modal').classList.add('active');
+        }
+
+        function closeModal() { document.getElementById('view-modal').classList.remove('active'); currentViewId = null; }
+        function closeModalOnOverlay(e) { if (e.target === e.currentTarget) closeModal(); }
+
+        // Delete Logic
+        function requestDelete(id) {
+            deleteTargetId = id;
+            document.getElementById('password-input').value = '';
+            document.getElementById('password-error').classList.add('hidden');
+            document.getElementById('password-modal').classList.add('active');
+            setTimeout(() => document.getElementById('password-input').focus(), 100);
+        }
+        function closePasswordModal() { document.getElementById('password-modal').classList.remove('active'); deleteTargetId = null; }
+        function closePasswordModalOnOverlay(e) { if (e.target === e.currentTarget) closePasswordModal(); }
+        function handlePasswordKeyPress(e) { if (e.key === 'Enter') confirmDelete(); }
+
+        function confirmDelete() {
+            const input = document.getElementById('password-input');
+            if (input.value === DELETE_PASSWORD) {
+                if (deleteTargetId) {
+                    deleteFromFirebase(deleteTargetId).then(() => {
+                        showToast('Tanda terima berhasil dihapus', 'success');
+                        closePasswordModal();
+                    }).catch(err => showToast('Gagal menghapus: ' + err.message, 'error'));
+                }
+            } else {
+                document.getElementById('password-error').classList.remove('hidden');
+                input.classList.add('shake');
+                setTimeout(() => input.classList.remove('shake'), 300);
+                input.value = '';
+                input.focus();
+            }
+        }
+
+        // PDF Download
+        async function downloadPDF(id) {
+            const receipt = localReceiptsCache.find(r => r.id === id);
+            if (!receipt) return;
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            // (PDF Generation code same as before)
+            doc.setFontSize(24).setFont('helvetica', 'bold').text('TANDA TERIMA', 105, 25, { align: 'center' });
+            doc.setFontSize(10).setFont('helvetica', 'normal').setTextColor(100).text(formatDate(receipt.tanggal), 105, 33, { align: 'center' });
+            doc.setDrawColor(0).setLineWidth(0.5).line(20, 40, 190, 40).line(20, 41, 190, 41);
+            
+            doc.setTextColor(0).setFontSize(11);
+            doc.setTextColor(100).text('No. Referensi', 20, 55).text(':', 70, 55);
+            doc.setTextColor(0).setFont('helvetica', 'bold').text(receipt.refNumber, 75, 55);
+            doc.setFont('helvetica', 'normal').setTextColor(100).text('Nama Penerima', 20, 65).text(':', 70, 65);
+            doc.setTextColor(0).setFont('helvetica', 'bold').text(receipt.nama, 75, 65);
+
+            doc.setFontSize(10).setFont('helvetica', 'bold').setFillColor(240, 240, 240).rect(20, 80, 170, 10, 'F');
+            doc.text('Barang', 25, 87).text('Jumlah', 130, 87).text('Satuan', 160, 87);
+
+            doc.setFont('helvetica', 'normal');
+            let y = 97;
+            receipt.items.forEach(i => { doc.text(i.nama, 25, y).text(String(i.jumlah), 135, y).text(i.satuan, 160, y); y += 8; });
+
+            try { doc.addImage(receipt.signature, 'PNG', 120, y + 20, 50, 25); } catch (e) {}
+            doc.setFontSize(9).setTextColor(100).text(receipt.nama, 145, y + 50, { align: 'center' }).setDrawColor(0).line(115, y + 51, 175, y + 51);
+            doc.save(`Tanda-Terima-${receipt.refNumber}.pdf`);
+            showToast('PDF berhasil didownload!', 'success');
+        }
+
+        function downloadCurrentPDF() { if (currentViewId) downloadPDF(currentViewId); }
+
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-message').textContent = message;
+            toast.className = `toast ${type} show`;
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+
+        // Initialize
+        document.getElementById('search-input').addEventListener('input', renderDashboard);
+        document.addEventListener('DOMContentLoaded', () => {
+            initSignatureCanvas();
+            attachItemListeners();
+            updatePreview();
+            document.getElementById('namaPenerima').addEventListener('input', handleNamaPenerimaChange);
+        });
+        document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeModal(); closePasswordModal(); } });
+    </script>
+</body>
+</html>
